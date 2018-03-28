@@ -11,6 +11,7 @@ namespace Pegas.Rizo
 
         private Animator _animator;
 
+        private int _hashResetCommonHUD;
         private int _hashShowCommonHUD;
         private int _hashShowZoomedHUD;
         private int _hashHideZoomedHUD;
@@ -21,14 +22,14 @@ namespace Pegas.Rizo
         private int _hashOnLocalPlayerReady;
         private int _hashOnRemotePlayerReady;
 
-        //private int _hashFadeIn;
-        //private int _hashFadeOut;
         private int _hashFaderOn;
+        private int _hashFitilOn;
 
         private void Awake()
         {
             _animator = GetComponent<Animator>();
 
+            _hashResetCommonHUD = Animator.StringToHash("ResetCommonHUD");
             _hashShowCommonHUD = Animator.StringToHash("ShowCommonHUD");
             _hashShowZoomedHUD = Animator.StringToHash("ShowZoomedHUD");
             _hashHideZoomedHUD = Animator.StringToHash("HideZoomedHUD");
@@ -39,9 +40,16 @@ namespace Pegas.Rizo
             _hashOnLocalPlayerReady = Animator.StringToHash("LocalPlayerReady");
             _hashOnRemotePlayerReady = Animator.StringToHash("RemotePlayerReady");
 
-            //_hashFadeIn = Animator.StringToHash("FadeIn");
-            //_hashFadeOut = Animator.StringToHash("FadeOut");
             _hashFaderOn = Animator.StringToHash("FaderOn");
+            _hashFitilOn = Animator.StringToHash("FitilOn");
+        }
+
+        public void ResetHUD()
+        {
+            _animator.SetBool(_hashOnLocalPlayerReady, false);
+            _animator.SetBool(_hashOnRemotePlayerReady, false);
+            _animator.SetBool(_hashShowReadyButton, false);
+            _animator.SetTrigger(_hashResetCommonHUD);
         }
 
         public void ShowCommonHUD()
@@ -84,6 +92,12 @@ namespace Pegas.Rizo
             _animator.SetBool(_hashOnRemotePlayerReady, true);
         }
 
+        public void HidePlayerReadyStatuses()
+        {
+            _animator.SetBool(_hashOnLocalPlayerReady, false);
+            _animator.SetBool(_hashOnRemotePlayerReady, false);
+        }
+
         public void FadeIn()
         {
             _animator.SetBool(_hashFaderOn, true);
@@ -92,6 +106,16 @@ namespace Pegas.Rizo
         public void FadeOut()
         {
             _animator.SetBool(_hashFaderOn, false);
+        }
+
+        public void ShowFitil()
+        {
+            _animator.SetBool(_hashFitilOn, true);
+        }
+
+        public void HideFitil()
+        {
+            _animator.SetBool(_hashFitilOn, false);
         }
 
         public void EventHandler_OnFadeInComplete()

@@ -63,7 +63,7 @@ namespace Pegas.Rizo
         private void Start()
         {
             _clientCurrentStage = RapidStage.Choises;
-            _camera.LongIntro(true);
+            _camera.LongIntro();
             _hud.FadeOut();
         }
 
@@ -312,6 +312,11 @@ namespace Pegas.Rizo
 
             if (stage == RapidStage.PreStartFadeIn || stage == RapidStage.PostStrikeFadeIn)
             {
+                if(stage == RapidStage.PostStrikeFadeIn)
+                {
+                    _hud.HideFitil();
+                }
+
                 _hud.FadeIn();
             }
 
@@ -397,6 +402,8 @@ namespace Pegas.Rizo
 
             if(_clientCurrentStage == RapidStage.PreStartFadeIn)
             {
+                _hud.HidePlayerReadyStatuses();
+
                 //send message to server FadeIn complete
                 if(IsNetworkedMode())
                 {
@@ -437,6 +444,7 @@ namespace Pegas.Rizo
                 }
 
                 _camera.ShortIntro();
+                _hud.ResetHUD();
                 _hud.FadeOut();
 
                 _clientCurrentStage = RapidStage.Choises;
@@ -458,6 +466,8 @@ namespace Pegas.Rizo
                     _Server_OnRapidStageComplete(_clientCurrentStage);
                     _Server_OnRapidStageComplete(_clientCurrentStage);
                 }
+
+                _hud.ShowFitil();
             }
         }
 
