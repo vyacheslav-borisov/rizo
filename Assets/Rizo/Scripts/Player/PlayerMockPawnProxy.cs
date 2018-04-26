@@ -49,6 +49,12 @@ namespace Pegas.Rizo
             _mockID = AssignMockID();
 
             GameManager.Instance.OnLocalPlayerAction += LocalPlayerActionHandler;
+
+            if(!_isLocalPlayer)
+            {
+                var cameraShake = Camera.main.GetComponent<CameraShake>();
+                cameraShake.TrackPoint = transform;
+            }
         }
 
         private void Start()

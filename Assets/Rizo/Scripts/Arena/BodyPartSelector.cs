@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Pegas.Rizo
 {
@@ -14,6 +15,10 @@ namespace Pegas.Rizo
             RemotePlayerView            
         }
 
+        public Camera _camera;
+        public CutscenePlayer _cutscenes;
+        public Button _backButton;  
+
         public Color _attackBPColor;
         public Color _deffenceBPColor;
         public float _longHoldTressHold = 2.0f;
@@ -24,11 +29,59 @@ namespace Pegas.Rizo
         public GameObject _longHoldEffect;
         public MoveGestureEffect _moveGestureEffect;
         public FireEdgeEffect _fireEdgeEffect;
-
-        private ArenaCamera _arenaCamera;
-        private Camera      _camera;
+        
         private BodyPart _prevBodyPart = null;
         private State _currenState = State.None;
+
+        private VFXImageEffect _transparentRenderLayer;
+
+        private void Awake()
+        {
+            _backButton.onClick.AddListener(Event_OnBackButtonClicked);
+
+            var child = _camera.transform.Find("VFXCamera_Transparent");
+            if(child != null)
+            {
+                _transparentRenderLayer = child.GetComponent<VFXImageEffect>();
+            }
+
+            _cutscenes.OnCutSceneUpdate += Event_OnZoomUpdate;
+        }
+
+        private void Event_OnBackButtonClicked()
+        {
+            if(_currenState == State.LocalPlayerView)
+            {
+                _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_OUT, _camera);                               
+            }
+
+            if (_currenState == State.RemotePlayerView)
+            {
+                _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_OUT, _camera);
+            }
+        }
+
+        private void Event_OnZoomUpdate(string sceneName, float normalizedTime)
+        {
+            if(_transparentRenderLayer == null)
+            {
+                return;
+            }
+            
+            if(sceneName == CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_IN 
+                || sceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_IN)
+            {
+                _transparentRenderLayer._shaderAlpha = 1 - normalizedTime;
+                return;
+            }
+
+            if (sceneName == CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_OUT
+                || sceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_OUT)
+            {
+                _transparentRenderLayer._shaderAlpha = normalizedTime;
+                return;
+            }
+        }
 
         private void OnDisable()
         {
@@ -79,13 +132,7 @@ namespace Pegas.Rizo
                     }                
                     break;
             }                        
-        }
-
-        private void Awake()
-        {
-            _arenaCamera = GetComponent<ArenaCamera>();
-            _camera = GetComponent<Camera>();
-        }
+        }        
 
         private IEnumerator Coroutine_CheckCharacterClick()
         {
@@ -106,14 +153,14 @@ namespace Pegas.Rizo
                             {
                                 Debug.Log("Local Player clicked");
 
-                                _arenaCamera.ZoomInLocalPlayer();
+                                _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_IN, _camera);
                                 yield break;
                             }
                             else
                             {
                                 Debug.Log("Remote Player clicked");
 
-                                _arenaCamera.ZoomInRemotePlayer();
+                                _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_IN, _camera);
                                 yield break;
                             }
                         }
@@ -146,10 +193,6 @@ namespace Pegas.Rizo
             recognizer.AddGesture(simpleClick);
             recognizer.AddGesture(hardClick);
             recognizer.AddGesture(longMove);
-            /*recognizer.OnRecognized = (GestureRecognizer.Gesture gesture) =>
-            {
-                Debug.Log("Gesture " + gesture.ID + " is recognized");
-            };*/
 
             recognizer.OnRecognized = CallBack_OnGestureRecognized;
 

@@ -25,6 +25,8 @@ namespace Pegas.Rizo
         private int _hashFaderOn;
         private int _hashFitilOn;
 
+        private Fitil _fitil;
+
         private void Awake()
         {
             _animator = GetComponent<Animator>();
@@ -42,6 +44,14 @@ namespace Pegas.Rizo
 
             _hashFaderOn = Animator.StringToHash("FaderOn");
             _hashFitilOn = Animator.StringToHash("FitilOn");
+
+            var fitilGO = transform.Find("FitilWrapper/Fitil");
+            if(fitilGO != null)
+            {
+                _fitil = fitilGO.GetComponent<Fitil>();
+            }
+
+            
         }
 
         public void ResetHUD()
@@ -116,6 +126,18 @@ namespace Pegas.Rizo
         public void HideFitil()
         {
             _animator.SetBool(_hashFitilOn, false);
+        }
+
+        public void SetFitilAnimPos(float normalizedTime)
+        {
+            /*
+            if(_fitil != null)
+            {
+                _fitil.SetPosition(normalizedTime);
+            }else
+            {
+                Debug.LogWarning("Fitil object not found!!!");
+            }*/
         }
 
         public void EventHandler_OnFadeInComplete()

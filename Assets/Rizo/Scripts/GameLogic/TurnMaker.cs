@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.Networking;
 
 
@@ -188,6 +189,15 @@ namespace Pegas.Rizo
             }
 
             return null;
-        }     
+        }
+
+        public NetworkInstanceId GetTurnWinner()
+        {
+            int randomNum = Random.Range(1, 100);
+            var result = (randomNum % 2 == 1) ? _player1._playerID 
+                : _player2._playerID;
+
+            return result;    
+        }
     }
 }

@@ -12,7 +12,8 @@ namespace Pegas.Rizo
             get; private set;
         }
 
-        public ArenaCamera _camera;
+        public CutscenePlayer _cutscenes;
+        public Camera _camera;
         public ArenaHUD _hud;
         public BodyPartSelector _bodyPartSelector; 
         
@@ -25,6 +26,8 @@ namespace Pegas.Rizo
         private Queue<Material> _unassignedMaterials = new Queue<Material>();
         private List<PlayerPawnProxy> _pawns = new List<PlayerPawnProxy>();
         private TurnMaker _turnMaker = new TurnMaker();
+
+        private CameraShake _cameraShake;
 
         GameManager()
         {
@@ -50,21 +53,27 @@ namespace Pegas.Rizo
             {
                 NetworkMessages.Instance.OnPlayerReady += Client_OnPlayerReady;
                 NetworkMessages.Instance.OnRapidEvent += Client_OnRapid;
-                NetworkMessages.Instance.OnRapidEventComplete += Server_OnRapidStageComplete; 
+                NetworkMessages.Instance.OnRapidEventComplete += Server_OnRapidStageComplete;
+                NetworkMessages.Instance.OnStrikePointAssigned += Client_OnStrikePointAssigned;
+                NetworkMessages.Instance.OnPlayerWinStrike += Client_OnPlayerWinStrike;
             }
 
             _hud.OnFadeInComplete += EventHandler_OnFadeInComplete;
             _hud.OnFadeOutComplete += EventHandler_OnFadeOutComplete;
+            _cutscenes.OnCutSceneEnd += EventHandler_OnStrikeCutSceneComplete;
 
             _turnMaker.Reset();
             _pawns.Clear();
+
+            _cameraShake = _camera.GetComponent<CameraShake>();
+            _cameraShake.enabled = false;
         }
 
         private void Start()
         {
             _clientCurrentStage = RapidStage.Choises;
-            _camera.LongIntro();
-            _hud.FadeOut();
+            //_cutscenes.PlayScene(CutscenePlayer.CUTSCENE_LONG_INTRO, _camera);
+            _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_SHORT_INTRO, _camera);
         }
 
         public void AddPawn(PlayerPawnProxy proxy)
@@ -198,6 +207,11 @@ namespace Pegas.Rizo
             {
                 _playersFadeOutComplete++;
             }
+
+            if(stage == RapidStage.RapidCutSceneComplete)
+            {
+                _playersStrikeCutsceneComplete++;
+            }
         }
 
         private enum RapidStage
@@ -205,6 +219,8 @@ namespace Pegas.Rizo
             Choises,
             PreStartFadeIn,
             PreStartFadeOut,
+            StrikeBegin,
+            RapidCutSceneComplete,
             PostStrikeFadeIn                        
         }
 
@@ -218,9 +234,15 @@ namespace Pegas.Rizo
         private Coroutine _strikeRapidLoop = null;
         private int _playersFadeInComplete = 0;
         private int _playersFadeOutComplete = 0;
+        private int _playersStrikeCutsceneComplete = 0;
+
         public IEnumerator Coroutine_Server_StrikeRapidLoop()
         {
             Debug.Log("Strike rapid loop started");
+
+            _playersFadeInComplete = 0;
+            _playersFadeOutComplete = 0;
+            _playersStrikeCutsceneComplete = 0;
 
             //start delaying
             yield return new WaitForSeconds(1.0f);
@@ -249,6 +271,18 @@ namespace Pegas.Rizo
 
                 pawnStates[i]._proxy.SetPosition(pawnStates[i]._startPosition);
                 pawnStates[i]._proxy.SetRotation(strikePoints[i].transform.rotation);
+
+                var playerID = _pawns[i].GetPlayerID();
+                var pointName = strikePoints[i].gameObject.name;
+                if (IsNetworkedMode())
+                {
+
+                    NetworkMessages.Instance.NotifyClients_OnPlayerAssignStrikePoint(playerID, pointName);
+                }
+                else
+                {
+                    _Client_OnStrikePointAssigned(playerID, pointName);
+                }
             }
 
             if (IsNetworkedMode())
@@ -265,22 +299,60 @@ namespace Pegas.Rizo
                 yield return null;
             }
 
-            yield return new WaitForSeconds(1.0f);
+            yield return new WaitForSeconds(2.0f);
 
-            const float k_strikeDuration = 10.0f;
+            if (IsNetworkedMode())
+            {
+                NetworkMessages.Instance.NotifyClients_OnRapidStage((int)RapidStage.StrikeBegin);
+            }
+            else
+            {
+                _Client_OnRapid(RapidStage.StrikeBegin);
+            }
+
+            const float k_strikeDuration = 30.0f;
             float ellapsedTime = 0.0f;
-            
+            float speed = 1.0f;
+            NetworkInstanceId? winner = null;
+
             while(ellapsedTime < k_strikeDuration)
             {
-                ellapsedTime += Time.deltaTime;
+                ellapsedTime += Time.deltaTime * speed;
                 float k = ellapsedTime / k_strikeDuration;
+
+                if(k >= 0.45 && !winner.HasValue)
+                {
+                    winner = _turnMaker.GetTurnWinner();
+                    speed = 3.0f;
+
+                    if (IsNetworkedMode())
+                    {
+                        NetworkMessages.Instance.NotifyClients_PlayerWinStrike(winner.Value);
+                    }
+                    else
+                    {
+                        _Client_OnPlayerWinStrike(winner.Value);
+                    }
+                }
 
                 for(int i = 0; i < pawnStates.Length; i++)
                 {
+                    var playerID = pawnStates[i]._proxy.GetPlayerID();
+
+                    if (winner.HasValue && !playerID.Equals(winner))
+                    {
+                        continue;                        
+                    }
+
                     var position = Vector3.Lerp(pawnStates[i]._startPosition, pawnStates[i]._endPosition, k);
                     pawnStates[i]._proxy.SetPosition(position);
-                }
+                }                
 
+                yield return null;
+            }
+
+            while(_playersStrikeCutsceneComplete < _pawns.Count)
+            {
                 yield return null;
             }
 
@@ -293,6 +365,8 @@ namespace Pegas.Rizo
                 _Client_OnRapid(RapidStage.PostStrikeFadeIn);
             }
 
+            //TODO: потом убрать
+            _turnMaker.Reset();
             _strikeRapidLoop = null;
         }
 
@@ -329,23 +403,21 @@ namespace Pegas.Rizo
                     var proxy = pawn.GetComponent<PlayerPawnProxy>();
                     if (proxy && proxy.IsLocalPlayer())
                     {
-                        var animator = _camera.GetComponent<Animator>();
-                        if (animator != null)
-                        {
-                            animator.enabled = false;
-                        }
-
                         //attach camera to local player
                         var camAttachPoint = pawn.transform.Find("back_cam_point");
                         _camera.transform.parent = camAttachPoint;
                         _camera.transform.localPosition = Vector3.zero;
                         _camera.transform.localRotation = Quaternion.identity;
-
                         break;
                     }
                 }
 
                 _hud.FadeOut();
+            }
+
+            if(stage == RapidStage.StrikeBegin)
+            {
+                _cameraShake.enabled = true;
             }
         }
 
@@ -391,8 +463,42 @@ namespace Pegas.Rizo
 
             if (playerStatus == k_isRemotePlayer)
             {
-                _hud.NotifyRemotePlayerReady();
+                _hud.NotifyRemotePlayerReady();                
             }            
+        }
+
+        private void Client_OnPlayerWinStrike(NetworkMessage message)
+        {
+            var pwsMessage = message.ReadMessage<NetworkMessages.PlayerWinStrike>();
+            _Client_OnPlayerWinStrike(pwsMessage._winnerPlayerID);
+        }
+
+        private void _Client_OnPlayerWinStrike(NetworkInstanceId winnerPlayerId)
+        {
+            _cameraShake.enabled = false;
+            _camera.transform.parent = null;
+            _cutscenes.PlayScene(_strikeCutscenes[winnerPlayerId], _camera);
+        }
+
+        private void Client_OnStrikePointAssigned(NetworkMessage message)
+        {
+            var spaMessage = message.ReadMessage<NetworkMessages.AssignStrikePoint>();
+            _Client_OnStrikePointAssigned(spaMessage._playerID, spaMessage._pointName);
+        }
+
+        private Dictionary<NetworkInstanceId, string> _strikeCutscenes = new Dictionary<NetworkInstanceId, string>();
+        private void _Client_OnStrikePointAssigned(NetworkInstanceId playerID, string strikePointName)
+        {
+            string value = strikePointName == "StartPoint_1" ? 
+                CutscenePlayer.CUTSCENE_RAPID_1 : CutscenePlayer.CUTSCENE_RAPID_2;
+
+            if(_strikeCutscenes.ContainsKey(playerID))
+            {
+                _strikeCutscenes[playerID] = value;
+            }else
+            {
+                _strikeCutscenes.Add(playerID, value);
+            }
         }
 
         private RapidStage _clientCurrentStage;
@@ -417,14 +523,10 @@ namespace Pegas.Rizo
 
             if(_clientCurrentStage == RapidStage.PostStrikeFadeIn)
             {
+                _cameraShake.enabled = false;
+
                 //dettach camera from local player
                 _camera.transform.parent = null;
-
-                var animator = _camera.GetComponent<Animator>();
-                if(animator != null)
-                {
-                    animator.enabled = true;
-                }
 
                 //place players to default spawn points
                 var pawns = GameObject.FindGameObjectsWithTag("PlayerPawn");
@@ -443,9 +545,7 @@ namespace Pegas.Rizo
                     }
                 }
 
-                _camera.ShortIntro();
-                _hud.ResetHUD();
-                _hud.FadeOut();
+                _cutscenes.PlayScene(CutscenePlayer.CUTSCENE_SHORT_INTRO, Camera.main);
 
                 _clientCurrentStage = RapidStage.Choises;
             }
@@ -468,6 +568,21 @@ namespace Pegas.Rizo
                 }
 
                 _hud.ShowFitil();
+            }
+        }
+
+        private void EventHandler_OnStrikeCutSceneComplete(string cutSceneName)
+        {
+            if(cutSceneName == CutscenePlayer.CUTSCENE_RAPID_1 || cutSceneName == CutscenePlayer.CUTSCENE_RAPID_2)
+            {
+                if(IsNetworkedMode())
+                {
+                    NetworkMessages.Instance.NotifyServer_RapidStageComplete((int)RapidStage.RapidCutSceneComplete);
+                }else
+                {
+                    _Server_OnRapidStageComplete(RapidStage.RapidCutSceneComplete);
+                    _Server_OnRapidStageComplete(RapidStage.RapidCutSceneComplete);
+                }
             }
         }
 

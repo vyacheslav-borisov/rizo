@@ -9,20 +9,36 @@ namespace Pegas.Rizo
 
         private const short MT_PlayerReady = MsgType.Highest + 1;
         private const short MT_RapidEvent = MsgType.Highest + 2;
+        private const short MT_PlayerWinStrike = MsgType.Highest + 3;
+        private const short MT_AssignStrikePoint = MsgType.Highest + 4;
+
 
         public class PlayerReady : MessageBase
         {
             public NetworkInstanceId _playerID;
         };
 
+        public class PlayerWinStrike: MessageBase
+        {
+            public NetworkInstanceId _winnerPlayerID;
+        }
+
         public class RapidEvent : MessageBase
         {
             public int _rapidEvent;
         };
 
+        public class AssignStrikePoint : MessageBase
+        {
+            public NetworkInstanceId _playerID;
+            public string _pointName;
+        };
+
         public NetworkMessageDelegate OnPlayerReady;
+        public NetworkMessageDelegate OnPlayerWinStrike;
         public NetworkMessageDelegate OnRapidEvent;
         public NetworkMessageDelegate OnRapidEventComplete;
+        public NetworkMessageDelegate OnStrikePointAssigned;
 
         public NetworkMessages()
         {
@@ -38,7 +54,9 @@ namespace Pegas.Rizo
             _client = client;
 
             client.RegisterHandler(MT_PlayerReady, MessageHandler_PlayerReady);
-            client.RegisterHandler(MT_RapidEvent, MessageHandler_OnRapidEvent);            
+            client.RegisterHandler(MT_RapidEvent, MessageHandler_OnRapidEvent);
+            client.RegisterHandler(MT_PlayerWinStrike, MessageHandler_PlayerWinStrike);
+            client.RegisterHandler(MT_AssignStrikePoint, MessageHandler_StrikePointAssigned);            
         }
 
         public void SubscribeClientMessages()
@@ -53,6 +71,25 @@ namespace Pegas.Rizo
             var message = new PlayerReady();
             message._playerID = playerID;
             NetworkServer.SendToAll(MT_PlayerReady, message);
+        }
+
+        public void NotifyClients_PlayerWinStrike(NetworkInstanceId winnerPlayerID)
+        {
+            Debug.Log("NetworkMessages.NotifyClients_PlayerReady");
+
+            var message = new PlayerWinStrike();
+            message._winnerPlayerID = winnerPlayerID;
+            NetworkServer.SendToAll(MT_PlayerWinStrike, message);
+        }
+
+        public void NotifyClients_OnPlayerAssignStrikePoint(NetworkInstanceId playerID, string strikePointName)
+        {
+            Debug.Log("NetworkMessages.NotifyClients_OnPlayerAssignStrikePoint");
+
+            var message = new AssignStrikePoint();
+            message._playerID = playerID;
+            message._pointName = strikePointName;
+            NetworkServer.SendToAll(MT_AssignStrikePoint, message);
         }
 
         public void NotifyClients_OnRapidStage(int stage)
@@ -84,6 +121,26 @@ namespace Pegas.Rizo
             if (OnPlayerReady != null)
             {
                 OnPlayerReady.Invoke(message);
+            }
+        }
+
+        private void MessageHandler_PlayerWinStrike(NetworkMessage message)
+        {
+            Debug.Log("NetworkMessages.MessageHandler_PlayerWinStrike");
+
+            if (OnPlayerWinStrike != null)
+            {
+                OnPlayerWinStrike.Invoke(message);
+            }
+        }
+
+        private void MessageHandler_StrikePointAssigned(NetworkMessage message)
+        {
+            Debug.Log("NetworkMessages.MessageHandler_StrikePointAssigned");
+
+            if(OnStrikePointAssigned != null)
+            {
+                OnStrikePointAssigned.Invoke(message);
             }
         }
 

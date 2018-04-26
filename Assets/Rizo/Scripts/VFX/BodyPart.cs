@@ -12,6 +12,7 @@ namespace Pegas.Rizo
         private Mesh _mesh;
         private int _colorParamID;
         private bool _isActive;
+        private bool _isLocalPlayer;
 
         private void Awake()
         {
@@ -32,20 +33,52 @@ namespace Pegas.Rizo
             if (hideOnPlayerZoom)
             {
                 PlayerPawnProxy player = GetComponentInParent<PlayerPawnProxy>();
-                if (player.IsLocalPlayer())
-                {
-                    ArenaCamera.Instance.OnLocalPlayer_ZoomStart.AddListener(Event_OnPlayerZoom);
-                }
-                else
-                {
-                    ArenaCamera.Instance.OnRemotePlayer_ZoomStart.AddListener(Event_OnPlayerZoom);
-                }
+                _isLocalPlayer = player.IsLocalPlayer();
 
-                ArenaCamera.Instance.OnPlayer_UnZoomEnd.AddListener(Event_OnPlayerUnZoom);
+                CutscenePlayer.Instance.OnCutSceneStart += Event_CutSceneStart;
+                CutscenePlayer.Instance.OnCutSceneEnd += Event_CutSceneEnd;
             }
             else
             {
                 gameObject.layer = LayerMask.NameToLayer("Player");
+            }
+        }
+
+        private void Event_CutSceneStart(string cutSceneName)
+        {
+            if(_isLocalPlayer)
+            {
+                if (cutSceneName == CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_IN)
+                {
+                    Event_OnPlayerZoom();
+                }
+            }
+            else 
+            {
+                //remote player
+                if (cutSceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_IN)
+                {
+                    Event_OnPlayerZoom();
+                }
+            }            
+        }
+
+        private void Event_CutSceneEnd(string cutSceneName)
+        {
+            if (_isLocalPlayer)
+            {
+                if (cutSceneName == CutscenePlayer.CUTSCENE_LOCAL_PLAYER_ZOOM_OUT)
+                {
+                    Event_OnPlayerUnZoom();
+                }
+            }
+            else
+            {
+                //remote player
+                if (cutSceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_OUT)
+                {
+                    Event_OnPlayerUnZoom();
+                }
             }
         }
 
