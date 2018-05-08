@@ -7,6 +7,7 @@ namespace Pegas.Rizo
     public class BodyPart : MonoBehaviour
     {
         public bool hideOnPlayerZoom;
+        public BodyPartType bpType;
 
         private Material _material;
         private Mesh _mesh;

@@ -31,6 +31,14 @@ public class DropDownButton : EventTrigger
         _optionLayer.SetActive(false);
     }
 
+    public void SetOptionChoosed(int index)
+    {
+       if(index >= 0 && index < _options.Length)
+       {
+            Event_OnOptionChoosed(index, _options[index].Icon);
+       }
+    }
+
     public void Event_OnOptionChoosed(int index, Image icon)
     {
         _icon.sprite = icon.sprite;

@@ -17,7 +17,8 @@ namespace Pegas.Rizo
 
         public Camera _camera;
         public CutscenePlayer _cutscenes;
-        public Button _backButton;  
+        public Button _backButton;
+        public DnDShield _shieldButton;  
 
         public Color _attackBPColor;
         public Color _deffenceBPColor;
@@ -29,15 +30,29 @@ namespace Pegas.Rizo
         public GameObject _longHoldEffect;
         public MoveGestureEffect _moveGestureEffect;
         public FireEdgeEffect _fireEdgeEffect;
-        
+        public PoofEffect     _simpleHitEffect;
+        public PoofEffect     _hardHitEffect;
+        //TODO: temporary body part effect
+        public BodyPartMark _bodyPartMarkEffect;
+        private BodyPartMark _attackedBodyPartMark;
+        private BodyPartMark _defencedBodyPartMark;
+
         private BodyPart _prevBodyPart = null;
+        private BodyPart _lastSelectedBodyPart = null;
         private State _currenState = State.None;
 
         private VFXImageEffect _transparentRenderLayer;
 
+        public delegate void EventHandler(BodyPartType bodyPartType, HitType hitType);
+        public delegate void EventHandler2(BodyPartType bodyPartType);
+
+        public EventHandler OnChoosedAttackedBodyPart;
+        public EventHandler2 OnChoosedDefencedBodyPart;
+
         private void Awake()
         {
             _backButton.onClick.AddListener(Event_OnBackButtonClicked);
+            _shieldButton.OnShieldDropped = Event_ShieldDroppedEvent;
 
             var child = _camera.transform.Find("VFXCamera_Transparent");
             if(child != null)
@@ -46,6 +61,40 @@ namespace Pegas.Rizo
             }
 
             _cutscenes.OnCutSceneUpdate += Event_OnZoomUpdate;
+        }
+
+        private bool Event_ShieldDroppedEvent()
+        {
+            if(_currenState != State.LocalPlayerView)
+            {
+                return false;
+            }
+
+            RaycastHit hitInfo;
+            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out hitInfo, 100.0f, 1 << LayerMask.NameToLayer("Player")))
+            {
+                var bodyPart = hitInfo.collider.gameObject.GetComponent<BodyPart>();
+                if(bodyPart.bpType != BodyPartType.Unknown)
+                {
+                    if (_defencedBodyPartMark != null)
+                    {
+                        Destroy(_defencedBodyPartMark.gameObject);
+                        _defencedBodyPartMark = null;
+                    }
+
+                    _defencedBodyPartMark = CreateBodyPartMark(_bodyPartMarkEffect, bodyPart);
+                    
+                    if(OnChoosedDefencedBodyPart != null)
+                    {
+                        OnChoosedDefencedBodyPart(bodyPart.bpType);
+                    }                   
+
+                    return true;
+                }   
+            }
+
+            return false;
         }
 
         private void Event_OnBackButtonClicked()
@@ -72,6 +121,12 @@ namespace Pegas.Rizo
                 || sceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_IN)
             {
                 _transparentRenderLayer._shaderAlpha = 1 - normalizedTime;
+
+                if (_attackedBodyPartMark != null)
+                {
+                    _attackedBodyPartMark._kParam = 1 - normalizedTime;
+                }
+
                 return;
             }
 
@@ -79,8 +134,15 @@ namespace Pegas.Rizo
                 || sceneName == CutscenePlayer.CUTSCENE_REMOTE_PLAYER_ZOOM_OUT)
             {
                 _transparentRenderLayer._shaderAlpha = normalizedTime;
+
+                if (_attackedBodyPartMark != null)
+                {
+                    _attackedBodyPartMark._kParam = normalizedTime;
+                }
+
                 return;
             }
+            
         }
 
         private void OnDisable()
@@ -220,6 +282,7 @@ namespace Pegas.Rizo
                     if (Physics.Raycast(ray, out hitInfo, 100.0f, 1 << LayerMask.NameToLayer("Player")))
                     {
                         currentBodyPart = hitInfo.collider.gameObject.GetComponent<BodyPart>();
+                        _lastSelectedBodyPart = currentBodyPart;
                     }
 
                     if (currentBodyPart != null && _prevBodyPart != null)
@@ -270,8 +333,7 @@ namespace Pegas.Rizo
                 var playerProxy = hitInfo.collider.GetComponentInParent<PlayerPawnProxy>();
                 if (playerProxy && !playerProxy.IsLocalPlayer())
                 {
-                    var position = transform.position + (hitInfo.point - transform.position) * 0.8f;
-                    Instantiate(_longHoldEffect, position, Quaternion.identity);
+                    Instantiate(_longHoldEffect);                    
                 }
             }
         }
@@ -292,37 +354,114 @@ namespace Pegas.Rizo
         {
             Debug.Log("Gesture " + gesture.ID + " is recognized");
 
-            if (gesture.ID != "LongMove")
+            if (gesture.ID == "LongMove")
             {
-                return;
+                _longMove_EndPos = Input.mousePosition;
+                var delta = _longMove_EndPos - _longMove_StartPos;
+                var center = _longMove_StartPos + delta.normalized * delta.magnitude * 0.5f;
+
+                RaycastHit hitInfo;
+                Ray ray = _camera.ScreenPointToRay(center);
+                if (Physics.Raycast(ray, out hitInfo, 100.0f, 1 << LayerMask.NameToLayer("Player")))
+                {
+                    var position = ray.origin + (hitInfo.point - ray.origin) * 0.8f;
+                    //var start = _camera.ScreenToWorldPoint(_longMove_StartPos);
+                    //var end = _camera.ScreenToWorldPoint(_longMove_EndPos);
+                    var start = _camera.ScreenToViewportPoint(_longMove_StartPos);
+                    var end = _camera.ScreenToViewportPoint(_longMove_EndPos);
+
+                    var radius = (end - start).magnitude * 0.5f;
+
+                    Debug.Log("screenStart = " + _longMove_StartPos);
+                    Debug.Log("screenEnd = " + _longMove_EndPos);
+                    Debug.Log("start = " + start);
+                    Debug.Log("end = " + end);
+                    Debug.Log("radius = " + radius);
+
+                    var go = Instantiate(_fireEdgeEffect.gameObject, position, Quaternion.identity);
+                    var effect = go.GetComponent<FireEdgeEffect>();
+                    effect.Radius = radius;
+
+                    if (_lastSelectedBodyPart != null)
+                    {
+                        if(_attackedBodyPartMark != null)
+                        {
+                            Destroy(_attackedBodyPartMark.gameObject);
+                            _attackedBodyPartMark = null;
+                        }
+
+                        var bodyPart = hitInfo.collider.GetComponent<BodyPart>();
+                        if (bodyPart != null)
+                        {
+                            _attackedBodyPartMark = CreateBodyPartMark(_bodyPartMarkEffect, bodyPart);
+                        }
+
+                        if(OnChoosedAttackedBodyPart != null)
+                        {
+                            OnChoosedAttackedBodyPart(bodyPart.bpType, HitType.Breakable);
+                        }
+                    }
+                }
             }
 
-            _longMove_EndPos = Input.mousePosition;
-            var delta = _longMove_EndPos - _longMove_StartPos;
-            var center = _longMove_StartPos + delta.normalized * delta.magnitude * 0.5f;
 
-            RaycastHit hitInfo;
-            Ray ray = _camera.ScreenPointToRay(center);
-            if (Physics.Raycast(ray, out hitInfo, 100.0f, 1 << LayerMask.NameToLayer("Player")))
+            if (gesture.ID == "SimpleClick")
             {
-                var position = ray.origin + (hitInfo.point - ray.origin) * 0.8f;
-                //var start = _camera.ScreenToWorldPoint(_longMove_StartPos);
-                //var end = _camera.ScreenToWorldPoint(_longMove_EndPos);
-                var start = _camera.ScreenToViewportPoint(_longMove_StartPos);
-                var end = _camera.ScreenToViewportPoint(_longMove_EndPos);      
+                var ray = _camera.ScreenPointToRay(Input.mousePosition);
+                var go = Instantiate(_simpleHitEffect.gameObject, Vector3.zero, Quaternion.identity);
+                var effect = go.GetComponent<PoofEffect>();
+                effect._focusRay = ray;
 
-                var radius = (end - start).magnitude * 0.5f;
+                if (_lastSelectedBodyPart != null)
+                {
+                    if (_attackedBodyPartMark != null)
+                    {
+                        Destroy(_attackedBodyPartMark.gameObject);
+                        _attackedBodyPartMark = null;
+                    }
 
-                Debug.Log("screenStart = " + _longMove_StartPos);
-                Debug.Log("screenEnd = " + _longMove_EndPos);
-                Debug.Log("start = " + start);
-                Debug.Log("end = " + end);
-                Debug.Log("radius = " + radius);
+                    _attackedBodyPartMark = CreateBodyPartMark(_bodyPartMarkEffect, _lastSelectedBodyPart);
 
-                GameObject go = Instantiate(_fireEdgeEffect.gameObject, position, Quaternion.identity);
-                FireEdgeEffect effect = go.GetComponent<FireEdgeEffect>();
-                effect.Radius = radius; 
+                    if (OnChoosedAttackedBodyPart != null)
+                    {
+                        OnChoosedAttackedBodyPart(_lastSelectedBodyPart.bpType, HitType.Simple);
+                    }
+                }
             }
+
+            if (gesture.ID == "HardClick")
+            {
+                var ray = _camera.ScreenPointToRay(Input.mousePosition);
+                var go = Instantiate(_hardHitEffect.gameObject, Vector3.zero, Quaternion.identity);
+                var effect = go.GetComponent<PoofEffect>();
+                effect._focusRay = ray;
+
+                if (_lastSelectedBodyPart != null)
+                {
+                    if (_attackedBodyPartMark != null)
+                    {
+                        Destroy(_attackedBodyPartMark.gameObject);
+                        _attackedBodyPartMark = null;
+                    }
+
+                    _attackedBodyPartMark = CreateBodyPartMark(_bodyPartMarkEffect, _lastSelectedBodyPart);
+
+                    if (OnChoosedAttackedBodyPart != null)
+                    {
+                        OnChoosedAttackedBodyPart(_lastSelectedBodyPart.bpType, HitType.Heavy);
+                    }
+                }
+            }
+        }//CallBack_OnGestureRecognized
+
+        private BodyPartMark CreateBodyPartMark(BodyPartMark prefab, BodyPart target)
+        {
+            var instance = Instantiate(prefab.gameObject, Vector3.zero, Quaternion.identity);
+            var effect = instance.GetComponent<BodyPartMark>();
+            effect._bodyPart = target.transform;
+            effect._camera = _camera;
+
+            return effect;
         }
     }
 }

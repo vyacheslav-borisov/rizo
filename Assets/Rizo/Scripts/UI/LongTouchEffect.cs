@@ -10,6 +10,7 @@ namespace Pegas.Rizo
         public float _speedUPTo = 3.0f;
         [Range(1, 10)]
         public float _speedUpTime = 2.0f;
+        public float _focusDistance = 40.0f;
         private float _elapsedTime = 0.0f;
 
         private void Awake()
@@ -36,9 +37,10 @@ namespace Pegas.Rizo
                     return;
                 }
 
-                transform.position = ray.origin + (hitInfo.point - ray.origin) * 0.8f;
-
-            }else
+                transform.position = ray.origin + ray.direction * _focusDistance;
+                transform.rotation = Quaternion.LookRotation(ray.direction, Vector3.up);
+            }
+            else
             {
                 Destroy(gameObject);
                 return;

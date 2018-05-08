@@ -47,10 +47,12 @@
 			
 			sampler2D _MainTex;
 			sampler2D _TransparentTex;
+			sampler2D _ParticlesTex;
 			sampler2D _BlurTex;
 			sampler2D _SkanLinesTex;
 
 			half     _TransparentAlpha;
+			half     _ParticlesAlpha;
 			half     _BlurAlpha;
 			half     _SkanLinesAlpha;
 
@@ -60,11 +62,13 @@
 				fixed4 blurColor = tex2D(_BlurTex, i.uv);
 				fixed4 scanLinesColor = tex2D(_SkanLinesTex, i.uv);
 				fixed4 transparentColor = tex2D(_TransparentTex, i.uv) * _TransparentAlpha;
+				fixed4 particlesColor = tex2D(_ParticlesTex, i.uv) * _ParticlesAlpha;
 
 				//blurColor = blurColor - scanLinesColor;
 
 				fixed4 result = mainColor;
 				result = result * (1 - transparentColor.a) + transparentColor;
+				result = result * (1 - particlesColor.a) + particlesColor;
 				result += (blurColor - scanLinesColor) * _BlurAlpha;
 
 				return result;

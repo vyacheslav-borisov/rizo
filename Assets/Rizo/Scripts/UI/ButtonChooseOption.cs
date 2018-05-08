@@ -9,15 +9,21 @@ public class ButtonChooseOption : EventTrigger
     private DropDownButton  _master;
     private int             _index;
     
+    public Image Icon
+    {
+        get { return _icon; }
+    }
 
-    private void Awake()
+    /*private void Awake()
     {
         _icon = transform.Find("icon").GetComponent<Image>();
         _tintMessage = transform.Find("tint").gameObject;       
-    }
+    }*/
 
     public void Init(DropDownButton master, int index)
     {
+        _icon = transform.Find("icon").GetComponent<Image>();
+        _tintMessage = transform.Find("tint").gameObject;
         _master = master;
         _index = index;
     }

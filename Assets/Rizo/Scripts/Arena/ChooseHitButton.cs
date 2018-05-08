@@ -7,10 +7,45 @@ namespace Pegas.Rizo
     [RequireComponent(typeof(DropDownButton))]
     public class ChooseHitButton : MonoBehaviour
     {
+        public  BodyPartSelector bpSelector;
+        private DropDownButton dropDownButton;
+
         private void Awake()
         {
-            var dropDownButton = GetComponent<DropDownButton>();
-            dropDownButton.OnOptionChossed += Event_OnOptionChoosed;        
+            dropDownButton = GetComponent<DropDownButton>();
+            dropDownButton.OnOptionChossed += Event_OnOptionChoosed;
+
+            if (bpSelector != null)
+            {
+                bpSelector.OnChoosedAttackedBodyPart += Event_OnBPChossed;
+                bpSelector.OnChoosedDefencedBodyPart += Event_OnShieldDropped;
+            }
+        }
+
+        private void Event_OnBPChossed(BodyPartType bodyPartType, HitType hitType)
+        {
+            GameManager.Instance.Action_ChooseHit(hitType);
+            GameManager.Instance.Action_ChooseAttackedBodyPart(bodyPartType);
+
+            switch(hitType)
+            {
+                case HitType.Simple:
+                    dropDownButton.SetOptionChoosed(2);
+                    break;
+                case HitType.Heavy:
+                    dropDownButton.SetOptionChoosed(0);
+                    break;
+                case HitType.Breakable:
+                    dropDownButton.SetOptionChoosed(1);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private void Event_OnShieldDropped(BodyPartType bodyPartType)
+        {
+            GameManager.Instance.Action_ChooseDefendedBodyPart(bodyPartType);
         }
 
         private void Event_OnOptionChoosed(int option)
